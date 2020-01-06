@@ -16,14 +16,17 @@ import (
 type PollingFileWatcher struct {
 	Filename string
 	Size     int64
+	Interval time.Duration
 }
 
-func NewPollingFileWatcher(filename string) *PollingFileWatcher {
-	fw := &PollingFileWatcher{filename, 0}
+func NewPollingFileWatcher(filename string, interval time.Duration) *PollingFileWatcher {
+	fw := &PollingFileWatcher{
+		Filename: filename,
+		Size:     0,
+		Interval: interval,
+	}
 	return fw
 }
-
-var POLL_DURATION time.Duration
 
 func (fw *PollingFileWatcher) BlockUntilExists(t *tomb.Tomb) error {
 	for {
@@ -33,7 +36,7 @@ func (fw *PollingFileWatcher) BlockUntilExists(t *tomb.Tomb) error {
 			return err
 		}
 		select {
-		case <-time.After(POLL_DURATION):
+		case <-time.After(fw.Interval):
 			continue
 		case <-t.Dying():
 			return tomb.ErrDying
@@ -65,7 +68,7 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 			default:
 			}
 
-			time.Sleep(POLL_DURATION)
+			time.Sleep(fw.Interval)
 			fi, err := os.Stat(fw.Filename)
 			if err != nil {
 				// Windows cannot delete a file if a handle is still open (tail keeps one open)
@@ -111,8 +114,4 @@ func (fw *PollingFileWatcher) ChangeEvents(t *tomb.Tomb, pos int64) (*FileChange
 	}()
 
 	return changes, nil
-}
-
-func init() {
-	POLL_DURATION = 250 * time.Millisecond
 }
